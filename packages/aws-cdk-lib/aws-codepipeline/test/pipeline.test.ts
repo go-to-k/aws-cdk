@@ -1008,6 +1008,34 @@ describe('', () => {
         });
       }).toThrow(/provider for sourceAction must be 'CodeStarSourceConnection', got 'Fake'/);
     });
+
+    test('throw if triggers are specified when pipelineType is not set to V2', () => {
+      const stack = new cdk.Stack();
+      const sourceArtifact = new codepipeline.Artifact();
+      const sourceAction = new CodeStarConnectionsSourceAction({
+        actionName: 'CodeStarConnectionsSourceAction',
+        output: sourceArtifact,
+        connectionArn: 'connection',
+        owner: 'owner',
+        repo: 'repo',
+      });
+
+      expect(() => {
+        new codepipeline.Pipeline(stack, 'Pipeline', {
+          pipelineType: codepipeline.PipelineType.V1,
+          triggers: [{
+            providerType: codepipeline.ProviderType.CODE_STAR_SOURCE_CONNECTION,
+            gitConfiguration: {
+              sourceAction,
+              pushFilter: [{
+                excludedTags: ['exclude1', 'exclude2'],
+                includedTags: ['include1', 'include2'],
+              }],
+            },
+          }],
+        });
+      }).toThrow(/trigger can only be used with V2 pipelines/);
+    });
   });
 
   describe('cross account key alias name tests', () => {

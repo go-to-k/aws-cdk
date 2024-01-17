@@ -1308,7 +1308,15 @@ export class Pipeline extends PipelineBase {
   }
 
   private renderTriggers(triggers?: Trigger[]): CfnPipeline.PipelineTriggerDeclarationProperty[] | undefined {
-    return triggers?.map(trigger => {
+    if (triggers === undefined || triggers.length === 0) {
+      return;
+    }
+
+    if (this.pipelineType !== PipelineType.V2) {
+      throw new Error('trigger can only be used with V2 pipelines');
+    }
+
+    return triggers.map(trigger => {
       let gitConfiguration: CfnPipeline.GitConfigurationProperty | undefined;
       if (trigger.gitConfiguration) {
         const sourceAction = trigger.gitConfiguration.sourceAction;
