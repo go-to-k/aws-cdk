@@ -183,6 +183,84 @@ export class Variable {
   }
 }
 
+/**
+ * Git push filter for trigger.
+ */
+export interface GitPushFilter {
+  /**
+   * The list of patterns of Git tags that, when pushed, are to be excluded from
+   * starting the pipeline.
+   *
+   * Maximum length of this array is 8.
+   *
+   * @default - no tags.
+   */
+  readonly excludedTags?: string[];
+
+  /**
+   * The list of patterns of Git tags that, when pushed, are to be included as
+   * criteria that starts the pipeline.
+   *
+   * Maximum length of this array is 8.
+   *
+   * @default - no tags.
+   */
+  readonly includedTags?: string[];
+}
+
+/**
+ * Git configuration for trigger.
+ */
+export interface GitConfiguration {
+  /**
+   * The pipeline source action where the trigger configuration, such as Git tags.
+   *
+   * The trigger configuration will start the pipeline upon the specified change only.
+   *
+   * You can only specify one trigger configuration per source action.
+   */
+  readonly sourceAction: IAction;
+
+  /**
+   * The field where the repository event that will start the pipeline,
+   * such as pushing Git tags, is specified with details.
+   *
+   * Git tags is the only supported event type.
+   *
+   * @default - no filter.
+   */
+  readonly pushFilter?: GitPushFilter[];
+}
+
+/**
+ * Provider type for trigger.
+ */
+export enum ProviderType {
+  /**
+   * CodeStarSourceConnection
+   */
+  CODE_STAR_SOURCE_CONNECTION = 'CodeStarSourceConnection',
+}
+
+/**
+ * Pipeline trigger.
+ */
+export interface Trigger {
+  /**
+   * The source provider for the event, such as connections configured
+   * for a repository with Git tags, for the specified trigger configuration.
+   */
+  readonly providerType: ProviderType;
+
+  /**
+   * Provides the filter criteria and the source stage for the repository
+   * event that starts the pipeline, such as Git tags.
+   *
+   * @default - no configuration.
+   */
+  readonly gitConfiguration?: GitConfiguration;
+}
+
 export interface PipelineProps {
   /**
    * The S3 bucket used by this Pipeline to store artifacts.
@@ -282,6 +360,17 @@ export interface PipelineProps {
    * @default - No variables
    */
   readonly variables?: Variable[]
+
+  /**
+   * The trigger configuration specifying a type of event, such as Git tags, that
+   * starts the pipeline.
+   *
+   * When a trigger configuration is specified, default change detection for repository
+   * and branch commits is disabled.
+   *
+   * @default - No triggers
+   */
+  readonly triggers?: Trigger[]
 }
 
 abstract class PipelineBase extends Resource implements IPipeline {
@@ -560,6 +649,7 @@ export class Pipeline extends PipelineBase {
       restartExecutionOnUpdate: props && props.restartExecutionOnUpdate,
       pipelineType: props.pipelineType,
       variables: Lazy.any({ produce: () => this.renderVariables() }, { omitEmptyArray: true }),
+      triggers: this.renderTriggers(props.triggers),
       name: this.physicalName,
     });
 
@@ -1215,6 +1305,44 @@ export class Pipeline extends PipelineBase {
 
   private renderVariables(): CfnPipeline.VariableDeclarationProperty[] {
     return this.variables.map(variable => variable.render());
+  }
+
+  private renderTriggers(triggers?: Trigger[]): CfnPipeline.PipelineTriggerDeclarationProperty[] | undefined {
+    return triggers?.map(trigger => {
+      let gitConfiguration: CfnPipeline.GitConfigurationProperty | undefined;
+      if (trigger.gitConfiguration) {
+        const sourceAction = trigger.gitConfiguration.sourceAction;
+        if (sourceAction.actionProperties.provider !== 'CodeStarSourceConnection') {
+          throw new Error('provider for sourceAction must be \'CodeStarSourceConnection\'');
+        }
+
+        const push: CfnPipeline.GitPushFilterProperty[] | undefined = trigger.gitConfiguration.pushFilter?.map(filter => {
+          if (filter.excludedTags && filter.excludedTags.length > 8) {
+            throw new Error(`maximum length of excludedTags is 8, got ${filter.excludedTags.length}}`);
+          }
+          if (filter.includedTags && filter.includedTags.length > 8) {
+            throw new Error(`maximum length of includedTags is 8, got ${filter.includedTags.length}`);
+          }
+
+          const tags: CfnPipeline.GitTagFilterCriteriaProperty | undefined = {
+            // set to undefined if 0 length
+            excludes: filter.excludedTags?.length ? filter.excludedTags : undefined,
+            includes: filter.includedTags?.length ? filter.includedTags : undefined,
+          };
+          return { tags };
+        });
+
+        gitConfiguration = {
+          push,
+          sourceActionName: sourceAction.actionProperties.actionName,
+        };
+      }
+
+      return {
+        gitConfiguration: gitConfiguration,
+        providerType: trigger.providerType,
+      };
+    });
   }
 
   private requireRegion(): string {
