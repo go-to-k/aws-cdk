@@ -1313,7 +1313,7 @@ export class Pipeline extends PipelineBase {
       if (trigger.gitConfiguration) {
         const sourceAction = trigger.gitConfiguration.sourceAction;
         if (sourceAction.actionProperties.provider !== 'CodeStarSourceConnection') {
-          throw new Error('provider for sourceAction must be \'CodeStarSourceConnection\'');
+          throw new Error(`provider for sourceAction must be 'CodeStarSourceConnection', got '${sourceAction.actionProperties.provider}'`);
         }
 
         const push: CfnPipeline.GitPushFilterProperty[] | undefined = trigger.gitConfiguration.pushFilter?.map(filter => {

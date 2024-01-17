@@ -1006,7 +1006,7 @@ describe('', () => {
             },
           }],
         });
-      }).toThrow(/provider for sourceAction must be 'CodeStarSourceConnection'/);
+      }).toThrow(/provider for sourceAction must be 'CodeStarSourceConnection', got 'Fake'/);
     });
   });
 
